@@ -3,23 +3,44 @@ import type {ReactNode} from 'react'
 import type {Session} from '@supabase/supabase-js'
 import {supabase} from './supabase'
 
-type Phase='checking'|'login'|'enroll'|'enroll-verify'|'challenge'|'ready'|'error'
+type Phase='checking'|'login'|'forgot'|'reset-password'|'enroll'|'enroll-verify'|'challenge'|'ready'|'error'
 type TotpSetup={factorId:string;qr:string;secret:string}
+type RecoveryTokens={access_token:string;refresh_token:string}
 
 const IDLE_TIMEOUT_MS=30*60*1000
+const MIN_PASSWORD_LENGTH=12
+const NEXO_URL='https://nataliloure.github.io/nexo/'
 const codeOk=(value:string)=>/^\d{6}$/.test(value)
 const passkeyErrorCode=(error:unknown)=>typeof error==='object'&&error!==null&&'code'in error?String((error as {code?:unknown}).code||''):''
+
+function recoveryTokensFromLocation():RecoveryTokens|null{
+  if(typeof window==='undefined'||!window.location.hash)return null
+  const params=new URLSearchParams(window.location.hash.slice(1))
+  if(params.get('type')!=='recovery')return null
+  const access_token=params.get('access_token')
+  const refresh_token=params.get('refresh_token')
+  return access_token&&refresh_token?{access_token,refresh_token}:null
+}
+
+function clearRecoveryUrl(){
+  if(typeof window==='undefined')return
+  window.history.replaceState(null,'',`${window.location.pathname}${window.location.search}`)
+}
 
 export default function SecureRoot({children}:{children:ReactNode}){
   const[phase,setPhase]=useState<Phase>('checking')
   const[email,setEmail]=useState('')
   const[password,setPassword]=useState('')
+  const[newPassword,setNewPassword]=useState('')
+  const[confirmPassword,setConfirmPassword]=useState('')
+  const[recoverySent,setRecoverySent]=useState(false)
   const[code,setCode]=useState('')
   const[factorId,setFactorId]=useState('')
   const[setup,setSetup]=useState<TotpSetup|null>(null)
   const[busy,setBusy]=useState(false)
   const[message,setMessage]=useState('')
   const assessmentSeq=useRef(0)
+  const recoveryMode=useRef(false)
   const passkeySupported=typeof window!=='undefined'&&'PublicKeyCredential'in window
 
   const assess=useCallback(async(session:Session|null)=>{
@@ -50,11 +71,44 @@ export default function SecureRoot({children}:{children:ReactNode}){
 
   useEffect(()=>{
     let active=true
-    supabase.auth.getSession().then(({data})=>{if(active)void assess(data.session)})
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
       if(!active)return
+      if(event==='PASSWORD_RECOVERY'){
+        recoveryMode.current=true
+        setMessage('')
+        setPhase('reset-password')
+        return
+      }
+      if(recoveryMode.current){
+        if(event==='SIGNED_OUT'){
+          recoveryMode.current=false
+          setPhase('login')
+        }
+        return
+      }
       window.setTimeout(()=>{if(active)void assess(session)},0)
     })
+
+    const initialize=async()=>{
+      const recoveryTokens=recoveryTokensFromLocation()
+      if(recoveryTokens){
+        recoveryMode.current=true
+        clearRecoveryUrl()
+        setMessage('')
+        setPhase('reset-password')
+        const{error}=await supabase.auth.setSession(recoveryTokens)
+        if(!active)return
+        if(error){
+          recoveryMode.current=false
+          setMessage('O link de recuperação é inválido ou expirou. Solicite um novo link.')
+          setPhase('forgot')
+        }
+        return
+      }
+      const{data}=await supabase.auth.getSession()
+      if(active)void assess(data.session)
+    }
+    void initialize()
     return()=>{active=false;subscription.unsubscribe();assessmentSeq.current++}
   },[assess])
 
@@ -99,11 +153,45 @@ export default function SecureRoot({children}:{children:ReactNode}){
       if(error||!data.session)throw error||new Error('passkey')
       await assess(data.session)
     }catch(error){
-      const code=passkeyErrorCode(error)
-      if(code==='passkey_disabled')setMessage('O login por Face ID está preparado no Nexo, mas Passkeys ainda precisa ser ativado no projeto Supabase.')
-      else if(code==='webauthn_credential_not_found')setMessage('Nenhuma chave de acesso do Nexo foi encontrada neste aparelho. Entre com senha e depois use o botão iPhone para cadastrar o Face ID.')
+      const errorCode=passkeyErrorCode(error)
+      if(errorCode==='passkey_disabled')setMessage('O login por Face ID está preparado no Nexo, mas Passkeys ainda precisa ser ativado no projeto Supabase.')
+      else if(errorCode==='webauthn_credential_not_found')setMessage('Nenhuma chave de acesso do Nexo foi encontrada neste aparelho. Entre com senha e depois use o botão iPhone para cadastrar o Face ID.')
       else setMessage('Não foi possível entrar com a chave de acesso. Você pode usar sua senha normalmente.')
       setPhase('login')
+    }finally{setBusy(false)}
+  }
+
+  const requestPasswordReset=async()=>{
+    if(!email.trim())return
+    setBusy(true);setMessage('');setRecoverySent(false)
+    try{
+      const{error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:NEXO_URL})
+      if(error)throw error
+      setRecoverySent(true)
+    }catch{
+      setMessage('Não foi possível enviar o link de recuperação agora. Confira sua conexão e tente novamente.')
+    }finally{setBusy(false)}
+  }
+
+  const updateRecoveredPassword=async()=>{
+    if(newPassword.length<MIN_PASSWORD_LENGTH){
+      setMessage(`A nova senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`)
+      return
+    }
+    if(newPassword!==confirmPassword){setMessage('As duas senhas não coincidem.');return}
+    setBusy(true);setMessage('')
+    try{
+      const{error}=await supabase.auth.updateUser({password:newPassword})
+      if(error)throw error
+      setNewPassword('');setConfirmPassword('')
+      const globalSignOut=await supabase.auth.signOut({scope:'global'})
+      if(globalSignOut.error)await supabase.auth.signOut({scope:'local'})
+      recoveryMode.current=false
+      setRecoverySent(false)
+      setMessage('Senha alterada com sucesso. Entre novamente e conclua o segundo fator para acessar seus dados.')
+      setPhase('login')
+    }catch{
+      setMessage('Não foi possível alterar a senha. O link pode ter expirado; solicite uma nova recuperação.')
     }finally{setBusy(false)}
   }
 
@@ -151,9 +239,36 @@ export default function SecureRoot({children}:{children:ReactNode}){
     <div className="security-form">
       <label>E-mail<input type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void login()}}/></label>
       <label>Senha<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void login()}}/></label>
-      {message&&<p className="security-error" role="alert">{message}</p>}
+      {message&&<p className={message.startsWith('Senha alterada')?'security-success':'security-error'} role="status">{message}</p>}
       <button className="primary" disabled={busy||!email.trim()||!password} onClick={()=>void login()}>{busy?'Verificando...':'Entrar'}</button>
+      <button className="security-link-button" type="button" onClick={()=>{setMessage('');setRecoverySent(false);setPhase('forgot')}}>Esqueci minha senha</button>
       <small>Criação de novas contas foi removida da interface pública do Nexo.</small>
+    </div>
+  </SecurityShell>
+
+  if(phase==='forgot')return <SecurityShell>
+    <div className="security-badge">RECUPERAÇÃO DE ACESSO</div><h1>Redefinir senha</h1>
+    <p>Informe o e-mail da sua conta. Se ele estiver cadastrado, o Supabase enviará um link seguro para você escolher uma nova senha.</p>
+    <div className="security-form">
+      <label>E-mail<input type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void requestPasswordReset()}}/></label>
+      {recoverySent&&<p className="security-success" role="status">Se este e-mail estiver associado à sua conta, você receberá uma mensagem com o link de recuperação. Verifique também a pasta de spam.</p>}
+      {message&&<p className="security-error" role="alert">{message}</p>}
+      <button className="primary" disabled={busy||!email.trim()} onClick={()=>void requestPasswordReset()}>{busy?'Enviando...':recoverySent?'Enviar novo link':'Enviar link de recuperação'}</button>
+      <button className="secondary" type="button" onClick={()=>{setMessage('');setRecoverySent(false);setPhase('login')}}>Voltar para entrar</button>
+    </div>
+    <p className="security-privacy-note">Por segurança, esta tela não informa se um endereço de e-mail existe ou não no Nexo.</p>
+  </SecurityShell>
+
+  if(phase==='reset-password')return <SecurityShell>
+    <div className="security-badge">LINK DE RECUPERAÇÃO VALIDADO</div><h1>Crie uma nova senha</h1>
+    <p>O link abriu uma sessão temporária de recuperação. Seus registros continuam bloqueados nesta etapa. Depois da alteração, será necessário entrar novamente e concluir o segundo fator.</p>
+    <div className="security-form">
+      <label>Nova senha<input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} value={newPassword} onChange={e=>setNewPassword(e.target.value)}/></label>
+      <label>Confirmar nova senha<input type="password" autoComplete="new-password" minLength={MIN_PASSWORD_LENGTH} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void updateRecoveredPassword()}}/></label>
+      <small>Use pelo menos {MIN_PASSWORD_LENGTH} caracteres e uma senha exclusiva para o Nexo.</small>
+      {message&&<p className="security-error" role="alert">{message}</p>}
+      <button className="primary" disabled={busy||newPassword.length<MIN_PASSWORD_LENGTH||confirmPassword.length<MIN_PASSWORD_LENGTH} onClick={()=>void updateRecoveredPassword()}>{busy?'Alterando...':'Salvar nova senha'}</button>
+      <button className="secondary" type="button" onClick={async()=>{recoveryMode.current=false;await supabase.auth.signOut({scope:'local'});setNewPassword('');setConfirmPassword('');setMessage('');setPhase('login')}}>Cancelar recuperação</button>
     </div>
   </SecurityShell>
 
