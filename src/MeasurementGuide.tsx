@@ -1,5 +1,4 @@
-import {useEffect,useState} from 'react'
-import {createPortal} from 'react-dom'
+import {useLocation} from 'react-router-dom'
 
 type Guide={title:string;measure:string;requirement:string;result:string;limit:string}
 
@@ -18,30 +17,12 @@ const guides:Record<string,Guide>={
   '/ciencia':{title:'O que a aba Ciência informa',measure:'Esta aba não produz medida nem escore. Ela documenta a fundamentação conceitual, as referências utilizadas e as escolhas de privacidade e método do Nexo.',requirement:'Nenhum preenchimento é necessário.',result:'Oferece transparência para distinguir itens autorais, referenciais científicos e limites de uso da plataforma.',limit:'Citar um referencial científico não transforma automaticamente os itens do Nexo em instrumento validado nem autoriza interpretação clínica.'},
 }
 
-function currentPath(){return window.location.hash.replace(/^#/,'').split('?')[0]||'/'}
-
 export default function MeasurementGuide(){
-  const[path,setPath]=useState(currentPath())
-  const[target,setTarget]=useState<HTMLElement|null>(null)
-  useEffect(()=>{const onHash=()=>setPath(currentPath());window.addEventListener('hashchange',onHash);return()=>window.removeEventListener('hashchange',onHash)},[])
-  useEffect(()=>{
-    let cancelled=false
-    const place=()=>{
-      if(cancelled)return
-      document.getElementById('nexo-measure-guide-anchor')?.remove()
-      const heading=document.querySelector('.app main h1')
-      if(!heading){requestAnimationFrame(place);return}
-      const anchor=document.createElement('div')
-      anchor.id='nexo-measure-guide-anchor'
-      heading.insertAdjacentElement('afterend',anchor)
-      setTarget(anchor)
-    }
-    requestAnimationFrame(place)
-    return()=>{cancelled=true;document.getElementById('nexo-measure-guide-anchor')?.remove()}
-  },[path])
-  const guide=guides[path]||guides['/']
-  if(!target)return null
-  return createPortal(<section className="measure-guide" aria-label="Como interpretar esta aba">
+  const{pathname}=useLocation()
+  if(pathname==='/compromissos')return null
+  const guide=guides[pathname]
+  if(!guide)return null
+  return <section className="measure-guide" aria-label="Como interpretar esta aba" key={pathname}>
     <div className="measure-guide-head"><span className="measure-guide-icon">◎</span><div><div className="eyebrow">medida, requisito e interpretação</div><h2>{guide.title}</h2></div></div>
     <div className="measure-guide-grid">
       <div><b>O que acompanha</b><p>{guide.measure}</p></div>
@@ -49,5 +30,5 @@ export default function MeasurementGuide(){
       <div><b>Resultado produzido</b><p>{guide.result}</p></div>
       <div><b>Limite de interpretação</b><p>{guide.limit}</p></div>
     </div>
-  </section>,target)
+  </section>
 }
