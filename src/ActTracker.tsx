@@ -1,5 +1,4 @@
 import {useEffect,useMemo,useState} from 'react'
-import {createPortal} from 'react-dom'
 import {supabase} from './supabase'
 
 type Category='valor'|'meta'|'acao_comprometida'|'acao_realizada'|'experiencia_interna'|'contexto'|'aprendizado'|'nao_classificavel'
@@ -38,7 +37,6 @@ const planned=/\b(vou|irei|pretendo|planejo|decidi|farei|vou tentar|me compromet
 const goal=/\b(até (hoje|amanhã|segunda|terça|quarta|quinta|sexta|sábado|domingo|o fim de semana)|esta semana|nesta semana|neste mês|até o dia \d+|terminar|finalizar|entregar|concluir|fazer matrícula|me matricular|atingir|alcançar)\b/i
 const context=/\b(quando|durante|depois que|antes de|na reunião|no trabalho|em casa|na faculdade|na aula|na conversa|aconteceu|ontem|hoje de manhã|hoje à tarde|hoje à noite)\b/i
 
-function currentPath(){return window.location.hash.replace(/^#/,'').split('?')[0]||'/'}
 function uid(){return globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`}
 function statusFor(category:Category,text:string){
   if(category==='valor')return valueExplicit.test(text)?'explícito':'candidato'
@@ -84,8 +82,6 @@ function textsFromRecord(r:DbRecord){
 function norm(s:string){return s.trim().toLocaleLowerCase('pt-BR')}
 
 export default function ActTracker(){
-  const[path,setPath]=useState(currentPath())
-  const[target,setTarget]=useState<HTMLElement|null>(null)
   const[text,setText]=useState('')
   const[rows,setRows]=useState<Row[]>([])
   const[records,setRecords]=useState<DbRecord[]>([])
@@ -93,42 +89,16 @@ export default function ActTracker(){
   const[saving,setSaving]=useState(false)
   const[source,setSource]=useState<'manual'|'plataforma'>('manual')
 
-  const active=path==='/compromissos'
   const load=async()=>{
-    const{data,error}=await supabase.from('nexo_records').select('id,record_type,payload,created_at').order('created_at',{ascending:true})
-    if(error)throw error
-    setRecords((data||[]) as DbRecord[])
+    setLoading(true)
+    try{
+      const{data,error}=await supabase.from('nexo_records').select('id,record_type,payload,created_at').order('created_at',{ascending:true})
+      if(error)throw error
+      setRecords((data||[]) as DbRecord[])
+    }finally{setLoading(false)}
   }
   useEffect(()=>{load().catch(console.error)},[])
-  useEffect(()=>{const onHash=()=>setPath(currentPath());window.addEventListener('hashchange',onHash);return()=>window.removeEventListener('hashchange',onHash)},[])
-  useEffect(()=>{
-    let cancelled=false
-    const place=()=>{
-      if(cancelled)return
-      const nav=document.querySelector('.app aside nav')
-      if(nav){
-        let link=document.getElementById('nexo-act-nav') as HTMLAnchorElement|null
-        if(!link){
-          link=document.createElement('a');link.id='nexo-act-nav';link.href='#/compromissos';link.textContent='Compromissos'
-          const values=[...nav.querySelectorAll('a')].find(a=>a.textContent==='Valores')
-          values?.insertAdjacentElement('afterend',link)
-          if(!values)nav.appendChild(link)
-        }
-        link.classList.toggle('active',active)
-      }
-      document.documentElement.classList.toggle('act-route',active)
-      document.getElementById('nexo-act-anchor')?.remove()
-      if(active){
-        const main=document.querySelector('.app main')
-        if(!main){requestAnimationFrame(place);return}
-        const anchor=document.createElement('div');anchor.id='nexo-act-anchor'
-        const footer=main.querySelector('footer');footer?main.insertBefore(anchor,footer):main.appendChild(anchor)
-        setTarget(anchor)
-      }else setTarget(null)
-    }
-    requestAnimationFrame(place)
-    return()=>{cancelled=true;document.documentElement.classList.remove('act-route');document.getElementById('nexo-act-anchor')?.remove();document.getElementById('nexo-act-nav')?.classList.remove('active')}
-  },[active])
+  useEffect(()=>{document.documentElement.classList.add('act-route');return()=>document.documentElement.classList.remove('act-route')},[])
 
   const previousConfirmed=useMemo(()=>{
     const values=new Map<string,string>()
@@ -193,8 +163,7 @@ export default function ActTracker(){
     }catch(e:any){alert(e.message||'Não foi possível salvar a análise.')}finally{setSaving(false)}
   }
 
-  if(!active||!target)return null
-  return createPortal(<>
+  return <>
     <div className="eyebrow">ACT · valor ≠ meta ≠ ação</div><h1>Valores e compromissos</h1>
     <section className="act-guide" aria-label="Como interpretar Valores e compromissos">
       <div><b>O que acompanha</b><p>Separa relatos em valor, meta, ação comprometida, ação realizada, experiência interna, contexto, aprendizado ou não classificável.</p></div>
@@ -219,5 +188,5 @@ export default function ActTracker(){
       <h2>Últimos meses</h2>{months.length?<div className="card act-months">{months.map(([month,m])=><div key={month}><b>{month}</b><span>{m.goals} meta(s)</span><span>{m.actions} ação(ões) com valor</span><span>{m.realized} realizada(s)</span></div>)}</div>:<div className="card"><p>Salve análises revisadas para acompanhar a evolução entre meses.</p></div>}
     </section>
     <div className="card caution"><h3>Como interpretar</h3><p>Na ACT, valores são direções contínuas e não “metas concluídas”. Uma ação pode estar alinhada a um valor mesmo quando ansiedade, tristeza, medo ou outro desconforto estiver presente. O Nexo não considera maior quantidade de metas ou ações como evidência automática de maior saúde psicológica.</p></div>
-  </>,target)
+  </>
 }
