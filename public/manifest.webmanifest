@@ -1,0 +1,19 @@
+{
+  "name": "Nexo: Autorregulação, flexibilidade e relações",
+  "short_name": "Nexo",
+  "description": "Auto-observação longitudinal de autorregulação, flexibilidade, relações, valores e metacognição.",
+  "start_url": "/nexo/",
+  "scope": "/nexo/",
+  "display": "standalone",
+  "background_color": "#f7f9f7",
+  "theme_color": "#111815",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/nexo/nexo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
