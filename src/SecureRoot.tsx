@@ -110,9 +110,10 @@ export default function SecureRoot({children}:{children:ReactNode}){
     if(!factorId||!codeOk(code))return
     setBusy(true);setMessage('')
     try{
-      const{data,error}=await supabase.auth.mfa.challengeAndVerify({factorId,code})
+      const{error}=await supabase.auth.mfa.challengeAndVerify({factorId,code})
       if(error)throw error
-      setCode('');setSetup(null)
+      setCode('');setSetup(null);setPhase('checking')
+      const{data}=await supabase.auth.getSession()
       await assess(data.session)
     }catch{
       setMessage('Código inválido ou expirado. Aguarde o próximo código do autenticador e tente novamente.')
@@ -139,7 +140,7 @@ export default function SecureRoot({children}:{children:ReactNode}){
   if(phase==='enroll')return <SecurityShell>
     <div className="security-badge">SEGUNDO FATOR OBRIGATÓRIO</div><h1>Proteja sua conta</h1>
     <p>Antes de acessar seus registros, configure um aplicativo autenticador. O código muda periodicamente e será exigido depois da senha.</p>
-    <div className="security-callout"><b>Você vai precisar de um autenticador TOTP.</b><span>Exemplos incluem aplicativos autenticadores compatíveis com códigos de 6 dígitos.</span></div>
+    <div className="security-callout"><b>Você vai precisar de um autenticador TOTP.</b><span>Use um aplicativo autenticador compatível com códigos temporários de 6 dígitos.</span></div>
     {message&&<p className="security-error" role="alert">{message}</p>}
     <div className="security-actions"><button className="primary" disabled={busy} onClick={()=>void beginEnrollment()}>{busy?'Preparando...':'Configurar autenticador'}</button><button className="secondary" onClick={signOut}>Sair</button></div>
   </SecurityShell>
