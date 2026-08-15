@@ -11,7 +11,8 @@ const IDLE_TIMEOUT_MS=30*60*1000
 const MIN_PASSWORD_LENGTH=12
 const NEXO_URL='https://nataliloure.github.io/nexo/'
 const codeOk=(value:string)=>/^\d{6}$/.test(value)
-const passkeyErrorCode=(error:unknown)=>typeof error==='object'&&error!==null&&'code'in error?String((error as {code?:unknown}).code||''):''
+const authErrorCode=(error:unknown)=>typeof error==='object'&&error!==null&&'code'in error?String((error as {code?:unknown}).code||''):''
+const CAPTCHA_SETUP_MESSAGE='A proteção anti-bot do Supabase está ativa, mas o Nexo ainda não recebeu um desafio CAPTCHA válido. Não é um problema da sua conexão. A configuração do CAPTCHA precisa ser concluída para liberar este acesso.'
 
 function recoveryTokensFromLocation():RecoveryTokens|null{
   if(typeof window==='undefined'||!window.location.hash)return null
@@ -139,8 +140,9 @@ export default function SecureRoot({children}:{children:ReactNode}){
       if(error||!data.session)throw error||new Error('login')
       setPassword('')
       await assess(data.session)
-    }catch{
-      setMessage('Não foi possível entrar. Confira suas credenciais e tente novamente.')
+    }catch(error){
+      if(authErrorCode(error)==='captcha_failed')setMessage(CAPTCHA_SETUP_MESSAGE)
+      else setMessage('Não foi possível entrar. Confira suas credenciais e tente novamente.')
       setPhase('login')
     }finally{setBusy(false)}
   }
@@ -153,8 +155,9 @@ export default function SecureRoot({children}:{children:ReactNode}){
       if(error||!data.session)throw error||new Error('passkey')
       await assess(data.session)
     }catch(error){
-      const errorCode=passkeyErrorCode(error)
-      if(errorCode==='passkey_disabled')setMessage('O login por Face ID está preparado no Nexo, mas Passkeys ainda precisa ser ativado no projeto Supabase.')
+      const errorCode=authErrorCode(error)
+      if(errorCode==='captcha_failed')setMessage(CAPTCHA_SETUP_MESSAGE)
+      else if(errorCode==='passkey_disabled')setMessage('O login por Face ID está preparado no Nexo, mas Passkeys ainda precisa ser ativado no projeto Supabase.')
       else if(errorCode==='webauthn_credential_not_found')setMessage('Nenhuma chave de acesso do Nexo foi encontrada neste aparelho. Entre com senha e depois use o botão iPhone para cadastrar o Face ID.')
       else setMessage('Não foi possível entrar com a chave de acesso. Você pode usar sua senha normalmente.')
       setPhase('login')
@@ -168,8 +171,9 @@ export default function SecureRoot({children}:{children:ReactNode}){
       const{error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:NEXO_URL})
       if(error)throw error
       setRecoverySent(true)
-    }catch{
-      setMessage('Não foi possível enviar o link de recuperação agora. Confira sua conexão e tente novamente.')
+    }catch(error){
+      if(authErrorCode(error)==='captcha_failed')setMessage(CAPTCHA_SETUP_MESSAGE)
+      else setMessage('Não foi possível enviar o link de recuperação agora. Tente novamente em alguns instantes.')
     }finally{setBusy(false)}
   }
 
