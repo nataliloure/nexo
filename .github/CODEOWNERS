@@ -1,0 +1,8 @@
+# Proprietária responsável por todo o código do Nexo
+* @nataliloure
+
+# Superfícies especialmente sensíveis
+.github/ @nataliloure
+src/supabase.ts @nataliloure
+src/SecureRoot.tsx @nataliloure
+supabase/ @nataliloure
