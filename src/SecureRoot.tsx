@@ -8,6 +8,7 @@ type TotpSetup={factorId:string;qr:string;secret:string}
 
 const IDLE_TIMEOUT_MS=30*60*1000
 const codeOk=(value:string)=>/^\d{6}$/.test(value)
+const passkeyErrorCode=(error:unknown)=>typeof error==='object'&&error!==null&&'code'in error?String((error as {code?:unknown}).code||''):''
 
 export default function SecureRoot({children}:{children:ReactNode}){
   const[phase,setPhase]=useState<Phase>('checking')
@@ -19,6 +20,7 @@ export default function SecureRoot({children}:{children:ReactNode}){
   const[busy,setBusy]=useState(false)
   const[message,setMessage]=useState('')
   const assessmentSeq=useRef(0)
+  const passkeySupported=typeof window!=='undefined'&&'PublicKeyCredential'in window
 
   const assess=useCallback(async(session:Session|null)=>{
     const seq=++assessmentSeq.current
@@ -89,6 +91,22 @@ export default function SecureRoot({children}:{children:ReactNode}){
     }finally{setBusy(false)}
   }
 
+  const loginWithPasskey=async()=>{
+    if(!passkeySupported)return
+    setBusy(true);setMessage('')
+    try{
+      const{data,error}=await supabase.auth.signInWithPasskey()
+      if(error||!data.session)throw error||new Error('passkey')
+      await assess(data.session)
+    }catch(error){
+      const code=passkeyErrorCode(error)
+      if(code==='passkey_disabled')setMessage('O login por Face ID está preparado no Nexo, mas Passkeys ainda precisa ser ativado no projeto Supabase.')
+      else if(code==='webauthn_credential_not_found')setMessage('Nenhuma chave de acesso do Nexo foi encontrada neste aparelho. Entre com senha e depois use o botão iPhone para cadastrar o Face ID.')
+      else setMessage('Não foi possível entrar com a chave de acesso. Você pode usar sua senha normalmente.')
+      setPhase('login')
+    }finally{setBusy(false)}
+  }
+
   const beginEnrollment=async()=>{
     setBusy(true);setMessage('')
     try{
@@ -128,6 +146,8 @@ export default function SecureRoot({children}:{children:ReactNode}){
   if(phase==='login')return <SecurityShell>
     <div className="security-badge">ACESSO RESTRITO</div><h1>Nexo</h1>
     <p>Entre com sua conta existente. A aplicação só libera os dados depois da autenticação em duas etapas.</p>
+    {passkeySupported&&<div className="security-passkey-entry"><button className="primary" disabled={busy} onClick={()=>void loginWithPasskey()}>Entrar com Face ID / chave de acesso</button><small>Se uma passkey do Nexo já estiver cadastrada neste aparelho, você não precisa digitar e-mail e senha. O segundo fator continua protegido.</small></div>}
+    <div className="security-divider"><span>ou use sua senha</span></div>
     <div className="security-form">
       <label>E-mail<input type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void login()}}/></label>
       <label>Senha<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void login()}}/></label>
@@ -139,7 +159,7 @@ export default function SecureRoot({children}:{children:ReactNode}){
 
   if(phase==='enroll')return <SecurityShell>
     <div className="security-badge">SEGUNDO FATOR OBRIGATÓRIO</div><h1>Proteja sua conta</h1>
-    <p>Antes de acessar seus registros, configure um aplicativo autenticador. O código muda periodicamente e será exigido depois da senha.</p>
+    <p>Antes de acessar seus registros, configure um aplicativo autenticador. O código muda periodicamente e será exigido depois da senha ou da chave de acesso.</p>
     <div className="security-callout"><b>Você vai precisar de um autenticador TOTP.</b><span>Use um aplicativo autenticador compatível com códigos temporários de 6 dígitos.</span></div>
     {message&&<p className="security-error" role="alert">{message}</p>}
     <div className="security-actions"><button className="primary" disabled={busy} onClick={()=>void beginEnrollment()}>{busy?'Preparando...':'Configurar autenticador'}</button><button className="secondary" onClick={signOut}>Sair</button></div>
