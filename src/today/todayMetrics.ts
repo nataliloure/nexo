@@ -25,7 +25,8 @@ export function safeMean(values:number[]):number|null{return values.length?value
 
 export function calculateDomainScore(payload:unknown,domain:Domain):number|null{
   if(!isObject(payload)||!isObject(payload.responses))return null
-  const values=DOMAIN_ITEMS[domain].map(id=>finiteNumber(payload.responses?.[id])).filter((value):value is number=>value!==null)
+  const responseMap=payload.responses
+  const values=DOMAIN_ITEMS[domain].map(id=>finiteNumber(responseMap[id])).filter((value):value is number=>value!==null)
   return values.length===DOMAIN_ITEMS[domain].length?safeMean(values):null
 }
 
@@ -78,7 +79,6 @@ function confirmedValuesFromRecords(records:RawRecord[]):ConfirmedValue[]{
 export function calculateValueActionConsistency(records:RawRecord[],nowMs=Date.now()):ValueActionConsistency{
   const confirmedValues=confirmedValuesFromRecords(records)
   const confirmedKeys=new Set(confirmedValues.map(value=>value.key))
-  const actions=[] as ValueActionConsistency['latestAction'][]
   const validActions:{text:string;value:string;status:string;realized:boolean;createdAt:string}[]=[]
   for(const record of records){
     if(record.record_type!=='value'||!isObject(record.payload)||nonEmptyString(record.payload.subtype)!=='act_commitment')continue
@@ -95,14 +95,13 @@ export function calculateValueActionConsistency(records:RawRecord[],nowMs=Date.n
       validActions.push({text:nonEmptyString(item.text),value,status,realized:category==='acao_realizada'||status==='realizada',createdAt:record.created_at})
     }
   }
-  void actions
   validActions.sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime())
   const realized=validActions.filter(action=>action.realized).length
   return{confirmedValues,actions:validActions.length,realized,ratio:validActions.length?realized/validActions.length:null,latestAction:validActions.at(-1)??null}
 }
 
 export function summarizeExperiments(records:RawRecord[]):ExperimentSummary{
-  const complete=[] as {anticipated:number;observed:number;difference:number;certainty:number|null;createdAt:string}[]
+  const complete:{anticipated:number;observed:number;difference:number;certainty:number|null;createdAt:string}[]=[]
   for(const record of records){
     if(record.record_type!=='experiment'||!isObject(record.payload))continue
     const anticipated=finiteNumber(record.payload.anticipatedIntensity)
