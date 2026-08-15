@@ -1,0 +1,445 @@
+/* Mobile-first refinements for touch devices and iPhone Safari.
+   This file is intentionally visual only: no auth, data, RLS or record logic lives here. */
+
+html{
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+  overflow-x:hidden;
+  background:#f7f9f7;
+}
+
+body{
+  min-width:0;
+  min-height:100vh;
+  min-height:100dvh;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+button,
+a,
+input,
+textarea,
+select{
+  -webkit-tap-highlight-color:transparent;
+}
+
+button,
+.primary,
+.secondary,
+.danger,
+nav a{
+  touch-action:manipulation;
+}
+
+input,
+textarea,
+select{
+  min-height:44px;
+}
+
+textarea{
+  resize:vertical;
+}
+
+input[type="range"]{
+  min-height:44px;
+  padding-block:0;
+  touch-action:pan-y;
+}
+
+@media (hover:none) and (pointer:coarse){
+  .card:hover,
+  .primary:hover,
+  .secondary:hover,
+  nav a:hover,
+  .cloud-word:hover{
+    transform:none;
+  }
+}
+
+@media(max-width:760px){
+  body{
+    overscroll-behavior-y:none;
+  }
+
+  .app{
+    display:block;
+    min-height:100dvh;
+  }
+
+  /* Compact sticky header. The existing desktop sidebar becomes a touch-friendly
+     horizontal navigation strip without changing the React navigation logic. */
+  .app>aside{
+    position:sticky;
+    inset-block-start:0;
+    z-index:60;
+    height:auto;
+    max-height:none;
+    padding:
+      max(10px,env(safe-area-inset-top))
+      max(14px,env(safe-area-inset-right))
+      10px
+      max(14px,env(safe-area-inset-left));
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:
+      "brand logout"
+      "account logout"
+      "nav nav";
+    align-items:center;
+    column-gap:12px;
+    box-shadow:0 8px 24px rgba(19,36,28,.16);
+  }
+
+  .app>aside h2{
+    grid-area:brand;
+    font-size:24px;
+    line-height:1;
+    margin:0;
+  }
+
+  .app>aside>small{
+    grid-area:account;
+    display:block;
+    min-width:0;
+    max-width:100%;
+    margin-top:4px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:11px;
+  }
+
+  .app>aside>nav{
+    grid-area:nav;
+    display:flex;
+    gap:6px;
+    width:100%;
+    margin-top:10px;
+    padding:1px 0 3px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .app>aside>nav::-webkit-scrollbar{
+    display:none;
+  }
+
+  .app>aside>nav a{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:42px;
+    padding:9px 12px;
+    border-radius:11px;
+    scroll-snap-align:start;
+    font-size:14px;
+    white-space:nowrap;
+  }
+
+  .app>aside>.primary{
+    grid-area:logout;
+    align-self:center;
+    width:auto;
+    min-width:64px;
+    min-height:44px;
+    margin-top:0!important;
+    padding:10px 13px;
+    box-shadow:none;
+  }
+
+  .app>main{
+    width:100%;
+    max-width:none;
+    padding:
+      20px
+      max(16px,env(safe-area-inset-right))
+      calc(96px + env(safe-area-inset-bottom))
+      max(16px,env(safe-area-inset-left));
+    overflow-x:hidden;
+  }
+
+  h1{
+    margin:5px 0 20px;
+    font-size:clamp(30px,9vw,36px);
+    line-height:1.04;
+    overflow-wrap:anywhere;
+  }
+
+  h2,h3,p,blockquote,label,small{
+    overflow-wrap:anywhere;
+  }
+
+  .eyebrow{
+    line-height:1.45;
+  }
+
+  .card{
+    min-width:0;
+    margin:10px 0;
+    padding:16px;
+    border-radius:15px;
+  }
+
+  .grid,
+  .two,
+  .word-controls,
+  .word-ranking{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  .form{
+    gap:16px;
+  }
+
+  .field,
+  label{
+    min-width:0;
+    gap:8px;
+  }
+
+  /* 16px prevents iOS Safari from zooming the viewport when a field receives focus. */
+  input,
+  textarea,
+  select{
+    min-width:0;
+    min-height:48px;
+    padding:12px 13px;
+    border-radius:11px;
+    font-size:16px;
+    line-height:1.35;
+  }
+
+  textarea{
+    min-height:112px;
+  }
+
+  input[type="file"]{
+    height:auto;
+    min-height:48px;
+    padding:8px;
+  }
+
+  input[type="range"]{
+    min-height:48px;
+    padding:0;
+  }
+
+  .item{
+    grid-template-columns:minmax(0,1fr);
+    gap:12px;
+    padding:16px 0;
+  }
+
+  /* Daily check-in becomes a five-column touch control rather than five small circles. */
+  .scale{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(44px,1fr));
+    gap:6px;
+    width:100%;
+  }
+
+  .scale button{
+    width:100%;
+    min-width:0;
+    height:48px;
+    border-radius:12px;
+    font-size:16px;
+    font-weight:650;
+  }
+
+  main .primary,
+  main .danger,
+  main .secondary{
+    min-height:48px;
+  }
+
+  .form>.primary,
+  .form>.danger,
+  .form>.secondary{
+    width:100%;
+  }
+
+  .trend .bars{
+    height:120px;
+    gap:4px;
+    overflow:hidden;
+  }
+
+  .bars i{
+    min-width:4px;
+  }
+
+  .word-cloud{
+    min-height:260px;
+    padding:20px 10px;
+    gap:10px 13px;
+  }
+
+  .suggestion-card{
+    padding:18px 16px;
+  }
+
+  .evidence-links a{
+    display:inline-flex;
+    align-items:center;
+    min-height:40px;
+  }
+
+  .act-actions{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+
+  .act-actions button{
+    width:100%;
+    min-height:48px;
+  }
+
+  .act-row-top{
+    gap:10px;
+  }
+
+  .act-remove{
+    flex:0 0 44px;
+    width:44px;
+    height:44px;
+  }
+
+  .act-confirm button{
+    min-height:44px;
+  }
+
+  .measure-guide,
+  .act-guide{
+    border-radius:15px;
+  }
+
+  footer{
+    margin-top:36px;
+    padding-bottom:env(safe-area-inset-bottom);
+    line-height:1.5;
+  }
+
+  /* Floating engagement UI respects the Home indicator area. */
+  .nexo-garden{
+    right:max(10px,env(safe-area-inset-right));
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    left:max(10px,env(safe-area-inset-left));
+    width:auto;
+    max-height:min(72dvh,620px);
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+
+  .nexo-garden.is-collapsed{
+    right:max(10px,env(safe-area-inset-right));
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    left:auto;
+    overflow:visible;
+  }
+
+  .garden-toggle{
+    min-width:44px;
+    min-height:44px;
+  }
+
+  .nexo-bloom{
+    bottom:calc(82px + env(safe-area-inset-bottom));
+    max-width:calc(100vw - 32px);
+    min-width:0;
+    width:max-content;
+  }
+
+  /* MFA/login screens remain usable when the iOS keyboard reduces viewport height. */
+  .security-shell{
+    min-height:100dvh;
+    place-items:start center;
+    padding:
+      calc(18px + env(safe-area-inset-top))
+      max(14px,env(safe-area-inset-right))
+      calc(24px + env(safe-area-inset-bottom))
+      max(14px,env(safe-area-inset-left));
+  }
+
+  .security-card{
+    width:100%;
+    padding:20px 16px;
+    border-radius:18px;
+  }
+
+  .security-card h1{
+    font-size:28px;
+  }
+
+  .security-form input{
+    min-height:50px;
+    font-size:16px;
+  }
+
+  .security-code-form input{
+    font-size:24px;
+  }
+
+  .security-form .primary,
+  .security-actions button{
+    width:100%;
+    min-height:50px;
+  }
+
+  .security-qr{
+    grid-template-columns:1fr;
+    gap:14px;
+    padding:14px;
+    text-align:center;
+  }
+
+  .security-qr img{
+    width:min(220px,100%);
+    height:auto;
+    aspect-ratio:1;
+    margin:auto;
+  }
+
+  .security-qr code{
+    user-select:all;
+    -webkit-user-select:all;
+  }
+}
+
+@media(max-width:390px){
+  .app>aside{
+    padding-inline:max(10px,env(safe-area-inset-left));
+  }
+
+  .app>aside h2{
+    font-size:22px;
+  }
+
+  .app>aside>nav a{
+    padding-inline:10px;
+  }
+
+  .app>main{
+    padding-inline:max(12px,env(safe-area-inset-left));
+  }
+
+  .card{
+    padding:14px;
+  }
+
+  .scale{
+    gap:5px;
+  }
+
+  .scale button{
+    min-width:0;
+    height:46px;
+  }
+}
