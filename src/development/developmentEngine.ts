@@ -261,7 +261,9 @@ function scoreCandidate(skill:SkillId,evidence:DevelopmentEvidence[],records:Raw
   const strongRecentSuccess=stats.some(stat=>skillPracticeIds.has(stat.practiceId)&&stat.outcomes>=2&&(stat.meanUtility??0)>=8&&stat.lastOutcomeAt!==null&&(nowMs-new Date(stat.lastOutcomeAt).getTime())<daysMs(7))
   if(strongRecentSuccess)score-=PRIORITY_WEIGHTS.recentSuccessPenalty
   const evidenceLevel=levelFor(observations,sources.size)
-  const personalized=observations>=MIN_PERSONALIZED_OBSERVATIONS&&quantitativeEvidence.length>0
+  const inCooldown=declined.has(skill)
+  const personalized=observations>=MIN_PERSONALIZED_OBSERVATIONS&&quantitativeEvidence.length>0&&sources.size>=2&&!inCooldown
+  if(inCooldown)score=Math.min(score,-1)
   if(!personalized)score-=PRIORITY_WEIGHTS.insufficientDataPenalty
   return{skill,priority:score,evidence,evidenceLevel,observationCount:observations,sourceCount:sources.size,quantitativeEvidenceCount:quantitativeEvidence.length,personalized}
 }
@@ -349,3 +351,27 @@ export function manualRecommendation(skill:SkillId,lowCapacity=false):PracticeRe
 }
 
 export function availablePracticeIds(){return new Set(PRACTICES.map(practice=>practice.id))}
+
+export function getPendingPractice(records:RawRecord[],nowMs=Date.now()){
+  const outcomes=new Set<string>()
+  for(const record of records){
+    const payload=developmentPayload(record)
+    if(payload&&nonEmptyString(payload.phase)==='outcome'){
+      const assignmentId=nonEmptyString(payload.assignmentId)
+      if(assignmentId)outcomes.add(assignmentId)
+    }
+  }
+  const validPracticeIds=availablePracticeIds()
+  const accepted=records.flatMap(record=>{
+    const payload=developmentPayload(record)
+    const time=timeOf(record)
+    if(!payload||time===null||time<nowMs-daysMs(14)||nonEmptyString(payload.phase)!=='accepted')return[]
+    const assignmentId=nonEmptyString(payload.assignmentId)
+    const practiceId=nonEmptyString(payload.practiceId)
+    const skill=nonEmptyString(payload.skill) as SkillId
+    const rawScope=nonEmptyString(payload.scope)
+    if(!assignmentId||outcomes.has(assignmentId)||!validPracticeIds.has(practiceId)||!(skill in SKILL_BY_ID))return[]
+    return[{assignmentId,practiceId,skill,scope:rawScope==='weekly'?'weekly' as const:'daily' as const,time}]
+  }).sort((a,b)=>b.time-a.time)
+  return accepted[0]??null
+}

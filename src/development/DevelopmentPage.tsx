@@ -3,7 +3,7 @@ import {supabase} from '../supabase'
 import type {RawRecord} from '../today/todayTypes'
 import {PRACTICES} from './practiceCatalog'
 import {MANUAL_SKILL_OPTIONS,SKILL_BY_ID} from './skillCatalog'
-import {buildDevelopmentPlan,manualRecommendation} from './developmentEngine'
+import {buildDevelopmentPlan,getPendingPractice,manualRecommendation} from './developmentEngine'
 import type {CompletionStatus,DevelopmentEventPayload,PracticeRecommendation,PracticeScope,SkillId} from './developmentTypes'
 
 const EVIDENCE_LABEL={insufficient:'Há poucos registros',weak:'Há um padrão inicial',moderate:'O padrão apareceu em fontes diferentes',strong:'O padrão apareceu repetidamente em fontes diferentes'} as const
@@ -115,6 +115,16 @@ export default function DevelopmentPage(){
   const dailyChoices=useMemo(()=>[plan.daily,...plan.alternatives].filter((item):item is PracticeRecommendation=>item!==null),[plan])
   const activeDaily=dailyChoices.length?dailyChoices[choice%dailyChoices.length]:null
   const manual=useMemo(()=>manualRecommendation(manualSkill,plan.context.lowCapacity),[manualSkill,plan.context.lowCapacity])
+  const recoveredAssignment=useMemo<Assignment|null>(()=>{
+    const pending=getPendingPractice(records)
+    if(!pending)return null
+    const practice=PRACTICES.find(item=>item.id===pending.practiceId)
+    if(!practice)return null
+    const candidate=plan.candidates.find(item=>item.skill===pending.skill)
+    const recommendation:PracticeRecommendation={practice,skill:SKILL_BY_ID[pending.skill],evidence:candidate?.evidence??[],evidenceLevel:candidate?.evidenceLevel??'insufficient',personalized:false,reasonSummary:'Prática previamente escolhida e ainda sem feedback.'}
+    return{assignmentId:pending.assignmentId,recommendation,scope:pending.scope}
+  },[records,plan.candidates])
+  const feedbackAssignment=assignment??recoveredAssignment
 
   const accept=async(recommendation:PracticeRecommendation,scope:PracticeScope)=>{
     setBusy(true)
@@ -177,7 +187,7 @@ export default function DevelopmentPage(){
       </article>)}</div>:<div className="card development-empty"><p>As metas semanais personalizadas aparecerão quando houver dados suficientes. Você ainda pode escolher manualmente uma prática curta acima.</p></div>}
     </section>
 
-    {assignment&&<PracticeFeedback key={assignment.assignmentId} assignment={assignment} onSaved={async()=>{await load();setAssignment(null)}}/>}
+    {feedbackAssignment&&<PracticeFeedback key={feedbackAssignment.assignmentId} assignment={feedbackAssignment} onSaved={async()=>{await load();setAssignment(null)}}/>}
 
     <section className="development-section" aria-labelledby="development-reason-title">
       <div className="eyebrow">por que estou praticando isso?</div><h2 id="development-reason-title">Habilidades em acompanhamento</h2>

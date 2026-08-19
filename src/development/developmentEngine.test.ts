@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest'
 import type {RawRecord} from '../today/todayTypes'
 import {PRACTICES} from './practiceCatalog'
-import {availablePracticeIds,buildDevelopmentPlan,getPracticeStats} from './developmentEngine'
+import {availablePracticeIds,buildDevelopmentPlan,getPendingPractice,getPracticeStats} from './developmentEngine'
 
 const NOW=new Date('2026-08-19T12:00:00Z').getTime()
 
@@ -32,7 +32,9 @@ function dev(id:string,date:string,payload:Record<string,unknown>){
 function relationClaritySeries(){
   return[
     relation('r1','2026-08-10',8),relation('r2','2026-08-11',8),relation('r3','2026-08-12',8),
-    relation('r4','2026-08-16',5),relation('r5','2026-08-17',5),relation('r6','2026-08-18',5),
+    relation('r4','2026-08-16',5,{context:'Não fui clara na conversa'}),
+    relation('r5','2026-08-17',5,{context:'Não fui clara ao explicar'}),
+    relation('r6','2026-08-18',5),
   ]
 }
 
@@ -122,6 +124,8 @@ describe('development engine',()=>{
       checkin('c2','2026-08-11',{Autorregulação:4}),
       checkin('c3','2026-08-12',{Autorregulação:4}),
       checkin('c4','2026-08-18',{Autorregulação:2},{energy:3,stress:8}),
+      rec('q1','reflection','2026-08-17T10:00:00Z',{thought:'Continuo pensando nisso de novo e não surgiu informação nova',action:''}),
+      rec('q2','reflection','2026-08-18T10:00:00Z',{thought:'A mesma análise e não surgiu informação nova',action:''}),
     ],NOW)
     const recommendations=[plan.daily,...plan.alternatives,...plan.weekly].filter(Boolean)
     expect(recommendations.length).toBeGreaterThan(0)
@@ -179,6 +183,30 @@ describe('development engine',()=>{
     expect(candidate?.quantitativeEvidenceCount).toBe(0)
     expect(candidate?.personalized).toBe(false)
     expect(plan.daily).toBeNull()
+  })
+
+  it('exige convergência entre tipos de fonte para personalização',()=>{
+    const plan=buildDevelopmentPlan([
+      checkin('c1','2026-08-10',{Metacognição:4}),
+      checkin('c2','2026-08-11',{Metacognição:4}),
+      checkin('c3','2026-08-12',{Metacognição:4}),
+      checkin('c4','2026-08-18',{Metacognição:2}),
+    ],NOW)
+    expect(plan.candidates.some(candidate=>candidate.quantitativeEvidenceCount>0)).toBe(true)
+    expect(plan.daily).toBeNull()
+  })
+
+  it('habilidade recusada entra em cooldown e não é insistida automaticamente',()=>{
+    const records=[...relationClaritySeries(),dev('decline','2026-08-18',{phase:'declined'})]
+    const plan=buildDevelopmentPlan(records,NOW)
+    expect(plan.daily?.skill.id).not.toBe('communication.clarity')
+  })
+
+  it('recupera prática aceita sem feedback em uma visita posterior',()=>{
+    const accepted=dev('accepted','2026-08-18',{phase:'accepted'})
+    const pending=getPendingPractice([accepted],NOW)
+    expect(pending?.practiceId).toBe('communication-one-sentence-purpose')
+    expect(pending?.scope).toBe('daily')
   })
 
   it('catálogo é determinístico e não contém endpoint externo',()=>{
