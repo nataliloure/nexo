@@ -65,11 +65,14 @@ export function normalizeWearableRow(row:Record<string,unknown>,fallbackSource='
 }
 
 function parseCsvRows(text:string){
+  const firstLine=text.split(/\r?\n/,1)[0]??''
+  const commaCount=(firstLine.match(/,/g)||[]).length,semicolonCount=(firstLine.match(/;/g)||[]).length
+  const delimiter=semicolonCount>commaCount?';':','
   const rows:string[][]=[];let row:string[]=[],cell='',quoted=false
   for(let i=0;i<text.length;i++){
     const char=text[i]
     if(char==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted;continue}
-    if(char===','&&!quoted){row.push(cell);cell='';continue}
+    if(char===delimiter&&!quoted){row.push(cell);cell='';continue}
     if((char==='\n'||char==='\r')&&!quoted){if(char==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(value=>value.trim()))rows.push(row);row=[];continue}
     cell+=char
   }
@@ -95,12 +98,12 @@ export function parseWearableText(text:string,fallbackSource='smartwatch'):Weara
   return[...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date))
 }
 
-function isWearablePayload(value:unknown):value is WearableDailyPayload{return isObject(value)&&nonEmptyString(value.subtype)==='wearable_daily'&&Boolean(normalizeWearableDate(value.date))}
+function isWearablePayload(value:unknown):value is WearableDailyPayload{return isObject(value)&&nonEmptyString(value.subtype)==='wearable_daily'&&Boolean(normalizeWearableDate(value.date))&&Boolean(nonEmptyString(value.source))}
 
 type WearableRecord={createdAt:string;payload:WearableDailyPayload}
 export function extractWearableRecords(records:RawRecord[]):WearableRecord[]{
   const byKey=new Map<string,WearableRecord>()
-  for(const record of records){if(record.record_type!=='review'||!isWearablePayload(record.payload))continue;const key=`${record.payload.source.toLocaleLowerCase('pt-BR')}|${record.payload.date}`;const existing=byKey.get(key);if(!existing||new Date(record.created_at).getTime()>=new Date(existing.createdAt).getTime())byKey.set(key,{createdAt:record.created_at,payload:record.payload})}
+  for(const record of records){if(record.record_type!=='experiment'||!isWearablePayload(record.payload))continue;const key=`${record.payload.source.toLocaleLowerCase('pt-BR')}|${record.payload.date}`;const existing=byKey.get(key);if(!existing||new Date(record.created_at).getTime()>=new Date(existing.createdAt).getTime())byKey.set(key,{createdAt:record.created_at,payload:record.payload})}
   return[...byKey.values()].sort((a,b)=>a.payload.date.localeCompare(b.payload.date))
 }
 
