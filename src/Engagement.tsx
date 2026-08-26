@@ -3,7 +3,7 @@ import type {Session} from '@supabase/supabase-js'
 import {supabase} from './supabase'
 import './engagement.css'
 
-type Row={id:string;record_type:string;created_at:string}
+type Row={id:string;record_type:string;created_at:string;payload?:any}
 
 const labels:Record<string,string>={
   checkin:'Check-in',relation:'Relação',reflection:'Reflexão',experiment:'Experimento',value:'Valores',review:'Revisão'
@@ -21,6 +21,7 @@ function localKey(date:Date){
   const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0')
   return `${y}-${m}-${d}`
 }
+function isWearable(row:Row){return row.payload?.subtype==='wearable_daily'}
 
 export default function Engagement(){
   const[session,setSession]=useState<Session|null>(null)
@@ -42,9 +43,9 @@ export default function Engagement(){
     let bloomTimer:number|undefined
     const load=async()=>{
       if(document.hidden)return
-      const{data,error}=await supabase.from('nexo_records').select('id,record_type,created_at').order('created_at',{ascending:true})
+      const{data,error}=await supabase.from('nexo_records').select('id,record_type,created_at,payload').order('created_at',{ascending:true})
       if(error||!live)return
-      const next=(data||[]) as Row[]
+      const next=((data||[]) as Row[]).filter(row=>!isWearable(row))
       if(initialized.current&&next.length>lastCount.current){
         setBloom(x=>x+1)
         window.clearTimeout(bloomTimer)
