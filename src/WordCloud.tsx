@@ -38,7 +38,7 @@ export default function WordCloud(){
   const analysis=useMemo(()=>{
     const cutoff=period==='all'?0:Date.now()-Number(period)*86400000
     const custom=new Set(tokens(exclude))
-    const selected=records.filter(r=>(type==='all'||r.record_type===type)&&new Date(r.created_at).getTime()>=cutoff)
+    const selected=records.filter(r=>r.payload?.subtype!=='wearable_daily'&&(type==='all'||r.record_type===type)&&new Date(r.created_at).getTime()>=cutoff)
     const texts=selected.flatMap(textsFromRecord)
     const counts=new Map<string,number>()
     texts.flatMap(tokens).forEach(w=>{if(!custom.has(w))counts.set(w,(counts.get(w)||0)+1)})
